@@ -35,7 +35,7 @@ output_dataset_length = len(output_dataset)
 for index, row in input_dataset[output_dataset_length:].iterrows():
   print(index, "/", len(input_dataset))
   prompt = row["prompt"]
-  out = pipe("hi")[0]["generated_text"]
+  out = pipe(prompt)[0]["generated_text"]
 
   # save new out
   output_list = list(output_dataset[output_column_name])
