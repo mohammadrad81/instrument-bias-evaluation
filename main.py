@@ -3,6 +3,7 @@ from utils import get_model_names_and_addresses
 from text.instrument_bias_evaluation_text import evaluate_llms
 
 def main():
+    max_new_tokens = 100
     if len (sys.argv) == 1:
         print("please enter an evaluation method after calling the script. like: python main.py text. The options are: text-to-text, image-text-to-text, audio-text-to-text")
         exit(-1)
@@ -10,7 +11,7 @@ def main():
     if evaluation_method == "text-to-text":
         print("text evaluation")
         model_names_and_addresses_list = get_model_names_and_addresses()
-        evaluate_llms(model_names_and_addresses_list)
+        evaluate_llms(model_names_and_addresses_list, max_new_tokens=max_new_tokens)
     else:
         print(f"invalid entered evaluation method: {evaluation_method}, it must be one of text-to-text, image-text-to-text, audio-text-to-text")
     

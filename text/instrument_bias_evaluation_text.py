@@ -24,7 +24,7 @@ from utils import (
 # print("import completed.")
 
 
-def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_tokens: int=500):
+def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_tokens: int=100):
     """Generates the llms outputs sequentially
 
     Args:
