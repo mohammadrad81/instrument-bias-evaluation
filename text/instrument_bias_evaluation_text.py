@@ -52,7 +52,7 @@ def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_
         loaded_dataset_length = len(output_dataset)
         counter = 0
         total = len(texts) * 19 * 2  # texts * instruments * prompt templates
-        print(f"Already generated {total} outputs.")
+        print(f"Already generated {loaded_dataset_length} outputs.")
         for text in texts:
             for social_bias_gender in GENDERS:
                 for instrument in CATEGORIES[social_bias_gender]:
