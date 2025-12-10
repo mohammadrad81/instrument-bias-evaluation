@@ -17,23 +17,16 @@ pip install requirements.txt
 There is a texts.json file, these are the descriptions that are used to evaluate models. It must be locate in the root directory of the repository, since it is used to evaluate all types of models.
 
 Since we support different types of models, the usage of the project for each type is different.
-
-### LLMs
-To evaluate LLMs, go to the text directory:
+To evaluate each type of models (text-to-text, image-text-to-text, audio-text-to-text), enter the following command:
 ```
-cd text
+python main.py TYPE_OF_MODEL
 ```
-
-There is a python script there, named "instrument_bias_evaluation_text.py". To use it, you need to give it names and addresses of the models to evaluate.
-
-To do this, you can simply run a command in the following format (in a linux-based system):
-
+For instance, to evaluate text-to-text models, enter:
 ```
-echo "model_name_1,model_address_1;model_name_2,model_address_2" | python instrument_bias_evaluation_text.py
+python main.py text-to-text
 ```
+The output of evaluation of each model, is a json file that stores model's outputs, whose name is the name of the model (by the way, its '/' is replaced by '__' and '.' is replaced by '_').
 
-The input that is piped to the script is a list of pairs of model names and addresses. The model's name is separated from its address by comma ',' and each model's information is separated from the other ones by a semicolon ';'.
+For each type of model, there is a json config file in a directory named "model-names-and-addresses". For each model, there is an entry "name" and another "address". The name of the model, is the one that is used to download it from huggingface, such as "unsloth/Meta-Llama-3.1-8B-Instruct", and its address is where you want it to be stored and cached.
 
-The output is generated sequentially, and if the execution is stopped (errors or shutdown or anything), simply re-execute it. It continues from where it was.
-
-The outputs of each model are saved in a single json file, whose name is the name of the model (by the way, its '/' is replaced by '__' and '.' is replaced by '_').
+It is checked that whether the model is found in the given address at first, if it is there, it is loaded from there, and if it is not found, it is downloaded from huggingface and saved there for further use.
