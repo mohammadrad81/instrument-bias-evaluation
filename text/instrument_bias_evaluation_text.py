@@ -101,7 +101,3 @@ def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_
         torch.cuda.empty_cache()  # remove the model from GPU
 
     print("inference ended.")
-
-
-if __name__ == "__main__":
-    main()
