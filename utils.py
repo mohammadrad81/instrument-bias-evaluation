@@ -172,11 +172,11 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
     pipe = None
     if os.path.isdir(model_address):
         print("model is already downloaded")
-        pipe = pipeline("text-generation", model=model_address, trust_remote_code=True)
+        pipe = pipeline("text-generation", model=model_address, trust_remote_code=True, device_map="auto")
     else:
         print("model not found in address: ", model_address)
         print("downloading...")
-        pipe = pipeline("text-generation", model=model_name, trust_remote_code=True)
+        pipe = pipeline("text-generation", model=model_name, trust_remote_code=True, device_map="auto")
         print("model downloaded, saving model to address: ", model_address)
         pipe.save_pretrained(model_address)
         print("model saved")
