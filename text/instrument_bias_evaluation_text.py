@@ -1,6 +1,8 @@
 # print("importing libraries...")
-
+from datasets import Dataset
 from transformers import pipeline, Pipeline
+from transformers.pipelines.pt_utils import KeyDataset
+from tqdm.auto import tqdm
 import torch
 import pandas as pd
 import datetime as dt
@@ -24,7 +26,7 @@ from utils import (
 # print("import completed.")
 
 
-def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_tokens: int=100):
+def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_tokens: int=100, batch_size=32):
     """Generates the llms outputs sequentially
 
     Args:
@@ -37,22 +39,11 @@ def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_
         model_address = model_data["address"]
         pipe = load_pipeline(model_name, model_address)
         output_dataset_path = model_name.replace("/", "__").replace(".", "_") + ".json"
-        output_dataset = pd.DataFrame(
-            {
-                "text": [],
-                "instrument": [],
-                "gender": [],
-                "is_with_reason": [],
-                "prompt": [],
-                "model_output": [],
-            }
-        )
-        if os.path.isfile(output_dataset_path):
-            output_dataset = pd.read_json(output_dataset_path)
-        loaded_dataset_length = len(output_dataset)
-        counter = 0
-        total = len(texts) * 19 * 2  # texts * instruments * prompt templates
-        print(f"Already generated {loaded_dataset_length} outputs.")
+        data_texts = []
+        data_instruments = []
+        data_genders = []
+        data_is_with_reasons = []
+        data_prompts = []
         for text in texts:
             for social_bias_gender in GENDERS:
                 for instrument in CATEGORIES[social_bias_gender]:
@@ -60,41 +51,39 @@ def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_
                         (False, WITHOUT_REASON_PROMPT_TEMPLATE),
                         (True, WITH_REASON_PROMPT_TEMPLATE),
                     ]:
-                        counter += 1
-                        if (
-                            counter <= loaded_dataset_length
-                        ):  # skip, it is generated before
-                            continue
-                        print(str(counter) + "/" + str(total))
-                        complete_prompt = template_to_complete_prompt(
-                            prompt_template, text, instrument, question
-                        )
-                        model_output = pipe(
-                            complete_prompt,
-                            max_new_tokens=max_new_tokens,
-                            return_full_text=False,
-                        )[0]["generated_text"]
-                        torch.cuda.empty_cache()  # to remove cached memory for input and output for more memory efficiency
-                        new_output_row = pd.DataFrame(
-                            {
-                                "text": [text],
-                                "instrument": [instrument],
-                                "gender": [social_bias_gender],
-                                "is_with_reason": [is_with_reason],
-                                "prompt": [complete_prompt],
-                                "model_output": [model_output],
-                            }
-                        )
-                        new_output_dataset = pd.concat(
-                            [output_dataset, new_output_row], ignore_index=True
-                        )
-                        new_output_dataset.to_json(output_dataset_path)
-                        # delete current output dataset from RAM to free space
-                        del output_dataset
-                        del new_output_row
-
-                        output_dataset = new_output_dataset
-                        del new_output_dataset
+                        
+                        data_texts.append(text)
+                        data_instruments.append(instrument)
+                        data_genders.append(social_bias_gender)
+                        data_is_with_reasons.append(is_with_reason)
+                        data_prompts.append(template_to_complete_prompt(prompt_template, text, instrument, question))
+        total_length = len(prompt_dataset)
+        print("inference started")
+        start_time = dt.datetime.now()
+        prompt_dataset = Dataset.from_list(
+            [
+                {
+                    "text": prompt
+                }
+                for prompt in data_prompts[:total_length]
+            ]
+        )
+        pipeline_outputs = tqdm(pipe(KeyDataset(prompt_dataset, "text"), batch_size=batch_size, max_new_tokens=max_new_tokens, return_full_text=False), total=total_length)
+        data_model_outputs = [
+            out[0]["generated_text"]
+            for out in pipeline_outputs
+        ]
+        output_dataset = pd.DataFrame({
+            "text": data_texts[:total_length],
+            "instrument": data_instruments[:total_length],
+            "gender": data_genders[:total_length],
+            "is_with_reason": data_is_with_reasons[:total_length],
+            "prompt": data_prompts[:total_length],
+            "model_output": data_model_outputs[:total_length],
+        })
+        output_dataset.to_json(output_dataset_path)
+        end_time = dt.datetime.now()
+        print("inference finished, total time: ", str(end_time - start_time))
         print("removing model from GPU...")
         del pipe  # no reference to the pipe any more, so it can be removed from GPU
         gc.collect()
