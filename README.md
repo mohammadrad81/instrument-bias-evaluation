@@ -11,7 +11,7 @@ The types of supported models for evaluation are: text-to-text, image-text-to-te
 ## Usage
 First of all, download the repository. There is a 'requirements.txt' file, install the required libraries using the following command:
 ```
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 There is a texts.json file, these are the descriptions that are used to evaluate models. It must be locate in the root directory of the repository, since it is used to evaluate all types of models.
