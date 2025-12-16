@@ -173,12 +173,6 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
     pipe = None
     if os.path.isdir(model_address):
         print("model is already downloaded")
-        # pipe = pipeline("text-generation",
-        #                 model=model_address,
-        #                 trust_remote_code=True,
-        #                 device_map="auto",
-        #                 tokenizer_kwargs={"fix_mistral_regex": True}
-        #                 )
         tokenizer = AutoTokenizer.from_pretrained(
             model_address,
             fix_mistral_regex=True
@@ -195,6 +189,8 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
             model=model,
             tokenizer=tokenizer
         )
+        pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
+        pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
         print("model loaded")
     else:
         print("model not found in address: ", model_address)
