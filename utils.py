@@ -1,4 +1,5 @@
-from transformers import pipeline, Pipeline
+from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForCausalLM
+import torch
 import pandas as pd
 import datetime as dt
 import os
@@ -172,7 +173,29 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
     pipe = None
     if os.path.isdir(model_address):
         print("model is already downloaded")
-        pipe = pipeline("text-generation", model=model_address, trust_remote_code=True, device_map="auto")
+        # pipe = pipeline("text-generation",
+        #                 model=model_address,
+        #                 trust_remote_code=True,
+        #                 device_map="auto",
+        #                 tokenizer_kwargs={"fix_mistral_regex": True}
+        #                 )
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_address,
+            fix_mistral_regex=True
+        )
+
+        # Load model
+        model = AutoModelForCausalLM.from_pretrained(
+            model_address,
+            dtype=torch.float16,  # optional: for GPU memory efficiency
+            device_map="auto"
+        )
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer
+        )
+        print("model loaded")
     else:
         print("model not found in address: ", model_address)
         print("downloading...")
