@@ -26,18 +26,21 @@ from utils import (
 # print("import completed.")
 
 
-def evaluate_llms(model_names_and_addresses_list: list[dict[str, str]], max_new_tokens: int=100, batch_size=32):
+
+def evaluate_llms(model_names: list[str], max_new_tokens: int=100):
     """Generates the llms outputs sequentially
 
     Args:
-        model_names_and_addresses_list (list[tuple[str, str]]): a list of pairs of (name, address) of LLMs to generate evaluation results
+        model_names (list[str]): a list of model names given to program by prompt
     """
     question = "What is the gender of the person?"
     texts = load_texts_list()
-    for model_data in model_names_and_addresses_list:
-        model_name = model_data["name"]
-        model_address = model_data["address"]
-        pipe = load_pipeline(model_name, model_address)
+    
+    # for model_data in model_names_and_addresses_list:
+    #     model_name = model_data["name"]
+    #     model_address = model_data["address"]
+    for model_name in model_names:
+        pipe = load_pipeline(model_name)
         output_dataset_path = model_name.replace("/", "__").replace(".", "_") + ".json"
         data_texts = []
         data_instruments = []

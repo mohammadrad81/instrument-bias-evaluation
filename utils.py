@@ -1,4 +1,5 @@
-from transformers import pipeline, Pipeline
+from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForCausalLM
+import torch
 import pandas as pd
 import datetime as dt
 import os
@@ -151,7 +152,7 @@ def get_model_names_and_addresses(models_names_addresses_file_path: str="model-n
     return data["models"]
 
 
-def load_pipeline(model_name: str, model_address: str) -> Pipeline:
+def load_pipeline(model_name: str, model_address: str="cached-model") -> Pipeline:
     """Loads the model. First it checks if the model is in the model_address
        if there is no directory in the given address, it downloads it using the given model_name from huggingface
        and saves it in there
@@ -172,12 +173,49 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
     pipe = None
     if os.path.isdir(model_address):
         print("model is already downloaded")
-        pipe = pipeline("text-generation", model=model_address, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_address,
+            fix_mistral_regex=True,
+            use_fast = False
+        )
+
+        # Load model
+        model = AutoModelForCausalLM.from_pretrained(
+            model_address
+            
+        )
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer
+        )
+        pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
+        pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
+        print("model loaded")
     else:
         print("model not found in address: ", model_address)
         print("downloading...")
-        pipe = pipeline("text-generation", model=model_name, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            fix_mistral_regex=True,            
+            use_fast = False
+        )
+
+        # Load model
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name
+            
+        )
+
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer
+        )
+        pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
+        pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
         print("model downloaded, saving model to address: ", model_address)
-        pipe.save_pretrained(model_address)
-        print("model saved")
+        # pipe.save_pretrained(model_address)
+        # print("model saved")
+        
     return pipe
