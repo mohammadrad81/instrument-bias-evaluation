@@ -152,7 +152,7 @@ def get_model_names_and_addresses(models_names_addresses_file_path: str="model-n
     return data["models"]
 
 
-def load_pipeline(model_name: str, model_address: str) -> Pipeline:
+def load_pipeline(model_name: str, model_address: str="cached-model") -> Pipeline:
     """Loads the model. First it checks if the model is in the model_address
        if there is no directory in the given address, it downloads it using the given model_name from huggingface
        and saves it in there
@@ -197,7 +197,7 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
         print("downloading...")
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
-            fix_mistral_regex=True,
+            fix_mistral_regex=True,            
             use_fast = False
         )
 
