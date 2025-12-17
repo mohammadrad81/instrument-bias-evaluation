@@ -1,10 +1,6 @@
 {
     "models": [
         {
-            "name": "unsloth/Meta-Llama-3.1-8B-Instruct",
-            "address": "llama-8B"
-        },
-        {
             "name": "mistralai/Mistral-7B-Instruct-v0.3",
             "address": "mistral-7B-v3"
         },

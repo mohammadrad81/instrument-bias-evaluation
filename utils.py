@@ -175,14 +175,14 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
         print("model is already downloaded")
         tokenizer = AutoTokenizer.from_pretrained(
             model_address,
-            fix_mistral_regex=True
+            fix_mistral_regex=True,
+            use_fast = False
         )
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            model_address,
-            dtype=torch.float16,  # optional: for GPU memory efficiency
-            device_map="auto"
+            model_address
+            
         )
         pipe = pipeline(
             "text-generation",
@@ -195,8 +195,27 @@ def load_pipeline(model_name: str, model_address: str) -> Pipeline:
     else:
         print("model not found in address: ", model_address)
         print("downloading...")
-        pipe = pipeline("text-generation", model=model_name, trust_remote_code=True, device_map="auto")
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            fix_mistral_regex=True,
+            use_fast = False
+        )
+
+        # Load model
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name
+            
+        )
+
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer
+        )
+        pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
+        pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
         print("model downloaded, saving model to address: ", model_address)
-        pipe.save_pretrained(model_address)
-        print("model saved")
+        # pipe.save_pretrained(model_address)
+        # print("model saved")
+        
     return pipe
