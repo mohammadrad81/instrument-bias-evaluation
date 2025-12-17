@@ -13,7 +13,7 @@ def main():
         model_names = sys.argv[2:]
         print("text evaluation")
         # model_names_and_addresses_list = get_model_names_and_addresses()
-        evaluate_llms(model_names, max_new_tokens=max_new_tokens)
+        evaluate_llms(model_names, max_new_tokens=max_new_tokens, batch_size=batch_size)
     else:
         print(f"invalid entered evaluation method: {evaluation_method}, it must be one of text-to-text, image-text-to-text, audio-text-to-text")
     

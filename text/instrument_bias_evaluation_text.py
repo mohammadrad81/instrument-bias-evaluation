@@ -27,7 +27,7 @@ from utils import (
 
 
 
-def evaluate_llms(model_names: list[str], max_new_tokens: int=100):
+def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: int=32):
     """Generates the llms outputs sequentially
 
     Args:
