@@ -50,16 +50,24 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
         data_prompts = []
         if os.path.isfile(output_dataset_path):
             partial_result = pd.read_json(output_dataset_path)
+            partial_result.drop_duplicates(subset=["text", "instrument", "gender", "is_with_reason"], inplace=True)
             print("Already generated ", str(len(partial_result)))
         for text in texts:
-            for social_bias_gender in GENDERS:
+            for social_bias_gender in CATEGORIES.keys():
                 for instrument in CATEGORIES[social_bias_gender]:
                     for is_with_reason, prompt_template in [
                         (False, WITHOUT_REASON_PROMPT_TEMPLATE),
                         (True, WITH_REASON_PROMPT_TEMPLATE),
                     ]:
                         complete_prompt = template_to_complete_prompt(prompt_template, text, instrument, question)
-                        if partial_result is not None and complete_prompt in set(partial_result["prompt"]):
+                        if (partial_result is not None) and (len( # if there is a partial result file, and it contains the row we are going to generate
+                            partial_result[
+                                (partial_result["text"] == text) &
+                                (partial_result["instrument"] == instrument) &
+                                (partial_result["gender"] == social_bias_gender) &
+                                (partial_result["is_with_reason"] == is_with_reason)
+                            ]
+                        ) > 0):
                             continue
                         data_texts.append(text)
                         data_instruments.append(instrument)
@@ -75,7 +83,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
                 {
                     "text": prompt
                 }
-                for prompt in data_prompts[:total_length]
+                for prompt in data_prompts
             ]
         )
         pipeline_outputs = tqdm(pipe(KeyDataset(prompt_dataset, "text"), batch_size=batch_size, max_new_tokens=max_new_tokens, return_full_text=False), total=total_length)
@@ -83,6 +91,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
             out[0]["generated_text"]
             for out in pipeline_outputs
         ]
+        data_model_outputs = [""] * len(data_prompts)
         output_dataset = pd.DataFrame({
             "text": data_texts,
             "instrument": data_instruments,
@@ -93,6 +102,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
         })
         if partial_result is not None:
             output_dataset = pd.concat([partial_result, output_dataset])
+            output_dataset.reset_index(inplace=True, drop=True)
         output_dataset.to_json(output_dataset_path, index=False)
         end_time = dt.datetime.now()
         print("inference finished, total time: ", str(end_time - start_time))
