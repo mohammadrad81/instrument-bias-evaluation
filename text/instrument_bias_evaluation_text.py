@@ -59,7 +59,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
                         (True, WITH_REASON_PROMPT_TEMPLATE),
                     ]:
                         complete_prompt = template_to_complete_prompt(prompt_template, text, instrument, question)
-                        if partial_result is not None and complete_prompt not in partial_result["prompt"]:
+                        if partial_result is not None and complete_prompt in partial_result["prompt"]:
                             continue
                         data_texts.append(text)
                         data_instruments.append(instrument)
