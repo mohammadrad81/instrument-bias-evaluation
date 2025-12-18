@@ -5,6 +5,7 @@ import datetime as dt
 import os
 import json
 import random
+from copy import deepcopy
 
 GENDERS = ["Male", "Female", "non-binary"]
 
@@ -80,6 +81,7 @@ def get_random_genders_string(genders_list: list = GENDERS) -> str:
     Returns:
         str: the string in the described format
     """
+    genders_list = deepcopy(genders_list) # because shuffle is an inplace function
     random.shuffle(genders_list)
     string = ", ".join(genders_list) + "."
     return string
