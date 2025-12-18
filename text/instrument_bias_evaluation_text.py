@@ -91,7 +91,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
             "prompt": data_prompts,
             "model_output": data_model_outputs,
         })
-        if partial_result:
+        if partial_result is not None:
             output_dataset = pd.concat([partial_result, output_dataset])
         output_dataset.to_json(output_dataset_path, index=False)
         end_time = dt.datetime.now()
