@@ -50,6 +50,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
         data_prompts = []
         if os.path.isfile(output_dataset_path):
             partial_result = pd.read_json(output_dataset_path)
+            print("Already generated ", str(len(partial_result)))
         for text in texts:
             for social_bias_gender in GENDERS:
                 for instrument in CATEGORIES[social_bias_gender]:
@@ -66,6 +67,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
                         data_is_with_reasons.append(is_with_reason)
                         data_prompts.append()
         total_length = len(data_prompts)
+        print("Generating for ", str(total_length) , " samples")
         print("inference started")
         start_time = dt.datetime.now()
         prompt_dataset = Dataset.from_list(
