@@ -91,7 +91,6 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
             out[0]["generated_text"]
             for out in pipeline_outputs
         ]
-        data_model_outputs = [""] * len(data_prompts)
         output_dataset = pd.DataFrame({
             "text": data_texts,
             "instrument": data_instruments,
