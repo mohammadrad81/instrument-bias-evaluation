@@ -65,7 +65,7 @@ def evaluate_llms(model_names: list[str], max_new_tokens: int=100, batch_size: i
                         data_instruments.append(instrument)
                         data_genders.append(social_bias_gender)
                         data_is_with_reasons.append(is_with_reason)
-                        data_prompts.append()
+                        data_prompts.append(complete_prompt)
         total_length = len(data_prompts)
         print("Generating for ", str(total_length) , " samples")
         print("inference started")
