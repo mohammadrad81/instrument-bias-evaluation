@@ -35,6 +35,31 @@ CATEGORIES = {
     "non-binary": GENDER_NEUTRAL_INSTRUMENTS,
 }
 
+TOTAL_INSTRUMENTS = [
+    "acoustic guitar",
+    "bass guitar",
+    "bassoon",
+    "cello",
+    "clarinet",
+    "drums",
+    "electric guitar",
+    "flute",
+    "glockenspiel",
+    "harmonica",
+    "harp",
+    "horn",
+    "keyboard",
+    "oboe",
+    "piano",
+    "piccolo",
+    "saxophone",
+    "trombone",
+    "trumpet",
+    "tuba",
+    "ukulele",
+    "violin",
+]
+
 LIKERT_SCALE = {
     "very low": 1,
     "low": 2,
@@ -81,13 +106,13 @@ def get_random_genders_string(genders_list: list = GENDERS) -> str:
     Returns:
         str: the string in the described format
     """
-    genders_list = deepcopy(genders_list) # because shuffle is an inplace function
+    genders_list = deepcopy(genders_list)  # because shuffle is an inplace function
     random.shuffle(genders_list)
     string = ", ".join(genders_list) + "."
     return string
 
 
-def load_texts_list(texts_path: str = "texts.json") -> list[str]:
+def load_texts_list(texts_path: str = "texts_with_taxonomy.json") -> list[str]:
     """Loads the texts for evaluation from the given json file
     the json file must be in the following format
     {
@@ -147,14 +172,18 @@ def print_input_model_names_and_addresses(
         )
 
 
-def get_model_names_and_addresses(models_names_addresses_file_path: str="model-names-and-addresses/text-to-text-models.json") -> list[dict[str, str]]:
+def get_model_names_and_addresses(
+    models_names_addresses_file_path: str = "model-names-and-addresses/text-to-text-models.json",
+) -> list[dict[str, str]]:
     data: dict = None
     with open(models_names_addresses_file_path, "r") as file:
         data = json.load(file)
     return data["models"]
 
 
-def load_pipeline(model_name: str, model_address: str="cached-model") -> Pipeline:
+def load_text_to_text_pipeline(
+    model_name: str, model_address: str = "cached-model"
+) -> Pipeline:
     """Loads the model. First it checks if the model is in the model_address
        if there is no directory in the given address, it downloads it using the given model_name from huggingface
        and saves it in there
@@ -176,21 +205,12 @@ def load_pipeline(model_name: str, model_address: str="cached-model") -> Pipelin
     if os.path.isdir(model_address):
         print("model is already downloaded")
         tokenizer = AutoTokenizer.from_pretrained(
-            model_address,
-            fix_mistral_regex=True,
-            use_fast = False
+            model_address, fix_mistral_regex=True, use_fast=False
         )
 
         # Load model
-        model = AutoModelForCausalLM.from_pretrained(
-            model_address
-            
-        )
-        pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer
-        )
+        model = AutoModelForCausalLM.from_pretrained(model_address)
+        pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
         pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
         pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
         print("model loaded")
@@ -198,26 +218,66 @@ def load_pipeline(model_name: str, model_address: str="cached-model") -> Pipelin
         print("model not found in address: ", model_address)
         print("downloading...")
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            fix_mistral_regex=True,            
-            use_fast = False
+            model_name, fix_mistral_regex=True, use_fast=False
         )
 
         # Load model
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name
-            
-        )
+        model = AutoModelForCausalLM.from_pretrained(model_name)
 
-        pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer
-        )
+        pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
         pipe.model.config.pad_token_id = pipe.model.config.eos_token_id
         pipe.tokenizer.pad_token = pipe.tokenizer.eos_token
-        print("model downloaded, saving model to address: ", model_address)
+        print("model downloaded.")
+        # print("model downloaded, saving model to address: ", model_address)
         # pipe.save_pretrained(model_address)
         # print("model saved")
-        
+
+    return pipe
+
+
+def load_image_text_to_text_pipeline(
+    model_name: str, model_address: str = "cached-model"
+) -> Pipeline:
+    """Loads the model. First it checks if the model is in the model_address
+       if there is no directory in the given address, it downloads it using the given model_name from huggingface
+       and saves it in there
+       if it is in the model_address, it loads it from there
+
+
+
+    Args:
+        model_name (str): the full name of the model, for example (unsloth/Llama-3.2-1B-Instruct)
+        model_address (str): the address to save/load model locally
+
+    Returns:
+        Pipeline: the pipeline for using LLM
+    """
+    print("loading model...")
+    print("model_name: ", model_name)
+    print("model_address: ", model_address)
+    pipe = None
+    if os.path.isdir(model_address):
+        print("model is already downloaded")
+        pipe = pipeline(
+            "image-text-to-text",
+            model=model_address,
+            trust_remote_code=True,
+            device_map="auto",
+        )
+        print("model loaded.")
+    else:
+        pipe = pipeline(
+            "image-text-to-text",
+            model=model_name,
+            trust_remote_code=True,
+            device_map="auto",
+        )
+        print("model downloaded.")
+        # print("model downloaded, saving model to address: ", model_address)
+        # pipe.save_pretrained(model_address)
+        # print("model saved")
+    
+    pipe.tokenizer.pad_token_id = pipe.tokenizer.eos_token_id
+    pipe.tokenizer.padding_side = 'left'
+
     return pipe

@@ -1,10 +1,10 @@
 import sys
 from utils import get_model_names_and_addresses
-from text.instrument_bias_evaluation_text import evaluate_llms
+from text.evaluate_text import evaluate_llms
 
 def main():
-    max_new_tokens = 100
-    batch_size = 32
+    max_new_tokens = 300
+    batch_size = 4
     if len (sys.argv) == 1:
         print("please enter an evaluation method after calling the script. like: python main.py text. The options are: text-to-text, image-text-to-text, audio-text-to-text")
         exit(-1)
