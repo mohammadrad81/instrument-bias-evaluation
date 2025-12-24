@@ -56,16 +56,14 @@ def evaluate_image_text_to_text_models(
     model_names: list[str],
     max_new_tokens: int = 300,
     batch_size: int = 32,
-    step_size_factor=3,  # is multiplied to batch_size to give to the model for better throughput
 ):
     """Generates the vlm outputs sequentially
 
     Args:
         model_names (list[str]): a list of model names given to program by prompt
     """
-    with_image_question = (
-        " The instrument is shown in the image. what is the gender of the person?"
-    )
+    
+    with_image_question = " The instrument is shown in the image. what is the gender of the person?"
     without_image_question = " What is the gender of the person?"
     texts = load_texts_list()
     for model_name in model_names:
@@ -176,20 +174,19 @@ def evaluate_image_text_to_text_models(
         else:
             output_dataset = partial_result
 
-        step_size = step_size_factor * batch_size
-        for start in range(0, len(data_prompts), step_size):
+        for start in range(0, len(data_prompts), batch_size):
             start_time = dt.datetime.now()
-            end = min(start + step_size, len(data_prompts))
+            end = min(start + batch_size, len(data_prompts))
             print(
-                f"inferencing for chunk, start: {start}, end: {end}, total: {len(data_prompts)}",
+                f"inferencing for batch, start: {start}, end: {end}, total: {len(data_prompts)}",
                 end=" ",
             )
-            prompt_chunk = data_prompts[start:end]
-            image_path_chunk = data_image_paths[start:end]
+            prompt_batch = data_prompts[start:end]
+            image_path_batch = data_image_paths[start:end]
             messages_dataset = Dataset.from_list(
                 [
                     {"messages": get_messages(prompt=prompt, photo_path=image_path)}
-                    for (prompt, image_path) in zip(prompt_chunk, image_path_chunk)
+                    for (prompt, image_path) in zip(prompt_batch, image_path_batch)
                 ]
             )
             pipeline_outputs = pipe(
@@ -200,7 +197,7 @@ def evaluate_image_text_to_text_models(
                 tokenizer_kwargs={"padding_side": "left"},
             )
             data_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
-            chunk_output_dataset = pd.DataFrame(
+            batch_output_dataset = pd.DataFrame(
                 {
                     "text": data_texts,
                     "instrument": data_instruments,
@@ -210,12 +207,12 @@ def evaluate_image_text_to_text_models(
                     "model_output": data_model_outputs,
                 }
             )
-            output_dataset = pd.concat([output_dataset, chunk_output_dataset])
+            output_dataset = pd.concat([output_dataset, batch_output_dataset])
             output_dataset.reset_index(inplace=True, drop=True)
             output_dataset.to_json(output_dataset_path, index=False)
             end_time = dt.datetime.now()
-            chunk_inference_time = end_time - start_time
-            print("chunk inference time: ", chunk_inference_time)
+            batch_inference_time = end_time - start_time
+            print("batch inference time: ", batch_inference_time)
         print("removing model from GPU...")
         del pipe  # no reference to the pipe any more, so it can be removed from GPU
         gc.collect()
