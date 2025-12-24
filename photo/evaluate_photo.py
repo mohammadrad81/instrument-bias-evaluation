@@ -174,7 +174,7 @@ def evaluate_image_text_to_text_models(
         else:
             output_dataset = partial_result
 
-        for start in range(len(output_dataset), len(data_prompts), batch_size):
+        for start in range(0, len(data_prompts), batch_size):
             start_time = dt.datetime.now()
             end = min(start + batch_size, len(data_prompts))
             print(
