@@ -262,6 +262,7 @@ def load_image_text_to_text_pipeline(
             "image-text-to-text",
             model=model_address,
             trust_remote_code=True,
+            dtype=torch.float16,
             device_map="auto",
         )
         print("model loaded.")
@@ -270,6 +271,7 @@ def load_image_text_to_text_pipeline(
             "image-text-to-text",
             model=model_name,
             trust_remote_code=True,
+            dtype=torch.float16,
             device_map="auto",
         )
         print("model downloaded.")
