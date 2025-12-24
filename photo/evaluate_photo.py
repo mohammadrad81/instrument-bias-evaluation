@@ -196,15 +196,16 @@ def evaluate_image_text_to_text_models(
                 return_full_text=False,
                 tokenizer_kwargs={"padding_side": "left"},
             )
-            data_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
+            batch_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
             batch_output_dataset = pd.DataFrame(
                 {
-                    "text": data_texts,
-                    "instrument": data_instruments,
-                    "is_with_reason": data_is_with_reasons,
-                    "prompt": data_prompts,
-                    "image_path": data_image_paths,
-                    "model_output": data_model_outputs,
+                    "text": data_texts[start:end],
+                    "instrument": data_instruments[start:end],
+                    "is_with_reason": data_is_with_reasons[start:end],
+                    "prompt": data_prompts[start:end],
+                    "image_path": data_image_paths[start:end],
+                    "model_output": batch_model_outputs
+,
                 }
             )
             output_dataset = pd.concat([output_dataset, batch_output_dataset])
