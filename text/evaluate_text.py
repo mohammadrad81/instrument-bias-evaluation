@@ -88,36 +88,82 @@ def evaluate_llms(
         total_length = len(data_prompts)
         print("Generating for ", str(total_length), " samples")
         print("inference started")
-        start_time = dt.datetime.now()
-        prompt_dataset = Dataset.from_list(
-            [{"text": prompt} for prompt in data_prompts]
-        )
-        pipeline_outputs = tqdm(
-            pipe(
+        # start_time = dt.datetime.now()
+        # prompt_dataset = Dataset.from_list(
+        #     [{"text": prompt} for prompt in data_prompts]
+        # )
+        # pipeline_outputs = tqdm(
+        #     pipe(
+        #         KeyDataset(prompt_dataset, "text"),
+        #         batch_size=batch_size,
+        #         max_new_tokens=max_new_tokens,
+        #         return_full_text=False,
+        #     ),
+        #     total=total_length,
+        # )
+        # data_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
+        # output_dataset = pd.DataFrame(
+        #     {
+        #         "text": data_texts,
+        #         "instrument": data_instruments,
+        #         "gender": data_genders,
+        #         "is_with_reason": data_is_with_reasons,
+        #         "prompt": data_prompts,
+        #         "model_output": data_model_outputs,
+        #     }
+        # )
+        # if partial_result is not None:
+        #     output_dataset = pd.concat([partial_result, output_dataset])
+        #     output_dataset.reset_index(inplace=True, drop=True)
+        # output_dataset.to_json(output_dataset_path, index=False)
+        # end_time = dt.datetime.now()
+        # print("inference finished, total time: ", str(end_time - start_time))
+        if partial_result is None:
+            output_dataset = pd.DataFrame(
+                {
+                    "text": [],
+                    "instrument": [],
+                    "is_with_reason": [],
+                    "prompt": [],
+                    "model_output": [],
+                }
+            )
+        else:
+            output_dataset = partial_result
+
+        for start in range(0, len(data_prompts), batch_size):
+            start_time = dt.datetime.now()
+            end = min(start + batch_size, len(data_prompts))
+            print(
+                f"inferencing for batch, start: {start}, end: {end}, total: {len(data_prompts)}",
+                end=" ",
+            )
+            prompt_batch = data_prompts[start:end]
+            prompt_dataset = Dataset.from_list(
+                [{"text": prompt} for prompt in prompt_batch]
+            )
+            pipeline_outputs = pipe(
                 KeyDataset(prompt_dataset, "text"),
                 batch_size=batch_size,
                 max_new_tokens=max_new_tokens,
                 return_full_text=False,
-            ),
-            total=total_length,
-        )
-        data_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
-        output_dataset = pd.DataFrame(
-            {
-                "text": data_texts,
-                "instrument": data_instruments,
-                "gender": data_genders,
-                "is_with_reason": data_is_with_reasons,
-                "prompt": data_prompts,
-                "model_output": data_model_outputs,
-            }
-        )
-        if partial_result is not None:
-            output_dataset = pd.concat([partial_result, output_dataset])
+            )
+            batch_model_outputs = [out[0]["generated_text"] for out in pipeline_outputs]
+            batch_output_dataset = pd.DataFrame(
+                {
+                    "text": data_texts[start:end],
+                    "instrument": data_instruments[start:end],
+                    "is_with_reason": data_is_with_reasons[start:end],
+                    "prompt": data_prompts[start:end],
+                    "model_output": batch_model_outputs,
+                }
+            )
+            output_dataset = pd.concat([output_dataset, batch_output_dataset])
             output_dataset.reset_index(inplace=True, drop=True)
-        output_dataset.to_json(output_dataset_path, index=False)
-        end_time = dt.datetime.now()
-        print("inference finished, total time: ", str(end_time - start_time))
+            output_dataset.to_json(output_dataset_path, index=False)
+            end_time = dt.datetime.now()
+            batch_inference_time = end_time - start_time
+            print("batch inference time: ", batch_inference_time)
         print("removing model from GPU...")
         del pipe  # no reference to the pipe any more, so it can be removed from GPU
         gc.collect()
