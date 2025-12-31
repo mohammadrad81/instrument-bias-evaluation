@@ -1,4 +1,15 @@
-from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForCausalLM
+from transformers import (
+    pipeline,
+    Pipeline,
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    AudioFlamingo3ForConditionalGeneration,
+    AutoProcessor,
+    Qwen2AudioForConditionalGeneration,
+    AutoProcessor,
+)
+import librosa
+import os
 import torch
 import pandas as pd
 import datetime as dt
@@ -6,6 +17,9 @@ import os
 import json
 import random
 from copy import deepcopy
+
+QWEN_AUDIO_7B_MODEL_NAME = "Qwen/Qwen2-Audio-7B-Instruct"
+MUSIC_FLAMINGO_3_MODEL_NAME = "nvidia/music-flamingo-hf"
 
 GENDERS = ["Male", "Female", "non-binary"]
 
@@ -278,8 +292,155 @@ def load_image_text_to_text_pipeline(
         # print("model downloaded, saving model to address: ", model_address)
         # pipe.save_pretrained(model_address)
         # print("model saved")
-    
+
     pipe.tokenizer.pad_token_id = pipe.tokenizer.eos_token_id
-    pipe.tokenizer.padding_side = 'left'
+    pipe.tokenizer.padding_side = "left"
 
     return pipe
+
+def get_audio_model_messages(
+    model_name: str, prompts: list[str], audio_paths: list[str]
+):
+    messages = None
+    if model_name == MUSIC_FLAMINGO_3_MODEL_NAME:
+        messages = []
+        for prompt, audio_path in zip(prompts, audio_paths):
+            message = None
+            if audio_path == "":
+                message = [
+                    {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                ]
+            else:
+                message = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "audio", "path": audio_path},
+                        ],
+                    }
+                ]
+            messages.append(message)
+    elif model_name == QWEN_AUDIO_7B_MODEL_NAME:
+        messages = []
+        for prompt, audio_path in zip(prompts, audio_paths):
+            message = None
+            if audio_path == "":
+                message = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ]
+            else:
+                message = [
+                    [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "audio", "audio_url": audio_path},
+                            ],
+                        }
+                    ]
+                ]
+            messages.append(message)
+    return messages
+
+def inference_for_with_and_without_audio(inference_function,
+                                         processor: AutoProcessor,
+                                         model: AudioFlamingo3ForConditionalGeneration | Qwen2AudioForConditionalGeneration,
+                                         messages: list,
+                                         max_new_tokens)->list[str]:
+    # without audios must be in the start of messages and then with audios, since it splits them and jois them again
+    with_audios = [
+        message
+        for message in messages
+        if len(message[0]["content"]) == 2
+    ]
+    without_audios = [
+        message for message in messages
+        if len(message[0]["content"]) == 1
+    ]
+
+    with_audios_results = []
+    without_audios_results = []
+    if len(without_audios) > 0:
+        without_audios_results = inference_function(processor, model, messages, max_new_tokens)
+    if len(with_audios) > 0:
+        with_audios_results = inference_function(processor, model, messages, max_new_tokens)
+        
+    return without_audios_results + with_audios_results
+
+
+
+def music_flamingo_inference(
+    processor: AutoProcessor,
+    model: AudioFlamingo3ForConditionalGeneration,
+    messages: list,
+    max_new_tokens: int=300
+) -> list[str]:
+    inputs = processor.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_dict=True,
+    ).to(model.device)
+    
+    outputs = model.generate(**inputs.to(torch.bfloat16), max_new_tokens=max_new_tokens)
+    decoded_outputs = processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
+    return decoded_outputs
+
+def qwen_audio_7B_inference(
+    processor: AutoProcessor,
+    model: Qwen2AudioForConditionalGeneration,
+    messages: list,
+    max_new_tokens: int=300
+)-> list[str]:
+    batched_texts = [processor.apply_chat_template(conv, add_generation_prompt=True, tokenize=False) for conv in messages]
+    batched_audios = []
+    for conv in messages:
+        found_audio_for_conv = False
+        for message in conv:
+            if isinstance(message["content"], list):
+                for ele in message["content"]:
+                    if ele["type"] == "audio":
+                        batched_audios.append(
+                            librosa.load(
+                                ele['audio_url'],
+                                sr=processor.feature_extractor.sampling_rate)[0]
+                        )
+                        found_audio_for_conv = True
+                        break # Assuming only one audio per user turn for simplicity in batching
+                if found_audio_for_conv:
+                    break
+    inputs = processor(text=batched_texts, audios=batched_audios, return_tensors="pt", padding=True)
+    inputs = {k: v.to("cuda") for k, v in inputs.items() if v is not None}
+    generate_ids = model.generate(**inputs, max_new_tokens=64)
+    generate_ids = generate_ids[:, inputs["input_ids"].size(1):]
+    responses = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+    return responses
+
+def load_audio_processor_and_model_and_inference_function(model_name: str):
+    processor = None
+    model = None
+    inference_function = None
+    if model_name == MUSIC_FLAMINGO_3_MODEL_NAME:
+        processor = AutoProcessor.from_pretrained(model_name)
+        model = AudioFlamingo3ForConditionalGeneration.from_pretrained(
+            model_name, device_map="auto"
+        )
+        inference_function = music_flamingo_inference
+    elif model_name == QWEN_AUDIO_7B_MODEL_NAME:
+
+        processor = AutoProcessor.from_pretrained(model_name)
+        model = Qwen2AudioForConditionalGeneration.from_pretrained(
+            model_name, device_map="auto"
+        )
+        inference_function = qwen_audio_7B_inference
+    else:
+        raise Exception("unsupported model: ", model_name)
+
+    return (processor, model, inference_function)

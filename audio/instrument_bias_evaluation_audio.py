@@ -26,6 +26,32 @@ import os
 import time
 import librosa
 import re
+from transformers import pipeline, Pipeline
+import pandas as pd
+import os
+from datasets import Dataset
+from transformers.pipelines.pt_utils import KeyDataset
+from tqdm import tqdm
+import gc
+import torch
+import datetime as dt
+from utils import (
+    get_model_names_and_addresses,
+    print_input_model_names_and_addresses,
+    load_texts_list,
+    load_text_to_text_pipeline,
+    load_audio_processor_and_model_and_inference_function,
+    template_to_complete_prompt,
+    get_audio_model_messages,
+    inference_for_with_and_without_audio,
+    qwen_audio_7B_inference,
+    music_flamingo_inference,
+    GENDERS,
+    CATEGORIES,
+    TOTAL_INSTRUMENTS,
+    WITH_REASON_PROMPT_TEMPLATE,
+    WITHOUT_REASON_PROMPT_TEMPLATE,
+)
 
 # def is_valid_without_reason(text: str)-> bool:
 #   without_reason_output_regex = re.compile(r'^(.*?)\s*\{\s*"Female"\s*:\s*"([^"]*)"\s*,\s*"non-binary"\s*:\s*"([^"]*)"\s*,\s*"Male"\s*:\s*"([^"]*)"\s*\}\s*(.*)$')
@@ -37,183 +63,349 @@ import re
 #   is_match = re.match(with_reason_output_regex, text)
 #   return is_match is not None
 
-max_new_tokens = 500
+# max_new_tokens = 500
 
-nvidia_flamingo_3_model_name = "nvidia/audio-flamingo-3-hf"
-nvidia_flamingo_3_model = None
-nvidia_flamingo_3_processor = None
+# nvidia_flamingo_3_model_name = "nvidia/audio-flamingo-3-hf"
+# nvidia_flamingo_3_model = None
+# nvidia_flamingo_3_processor = None
 
-nvidia_music_flamingo_hf_model_name = "nvidia/music-flamingo-hf"
-nvidia_music_flamingo_hf_model = None
-nvidia_music_flamingo_hf_processor = None
+# nvidia_music_flamingo_hf_model_name = "nvidia/music-flamingo-hf"
+# nvidia_music_flamingo_hf_model = None
+# nvidia_music_flamingo_hf_processor = None
 
-qwen_audio_7B_instruct_model_name = "Qwen/Qwen2-Audio-7B-Instruct"
-qwen_audio_7B_instruct_model = None
-qwen_audio_7B_instruct_processor = None
+# qwen_audio_7B_instruct_model_name = "Qwen/Qwen2-Audio-7B-Instruct"
+# qwen_audio_7B_instruct_model = None
+# qwen_audio_7B_instruct_processor = None
 
-def ask_nvidia_flamingo_3(text: str, audio_path: str)-> str:
-  global nvidia_flamingo_3_model, nvidia_flamingo_3_processor, max_new_tokens
-  if nvidia_flamingo_3_model is None:
-    print("downloading model: ", nvidia_flamingo_3_model_name)
-    nvidia_flamingo_3_processor = AutoProcessor.from_pretrained(nvidia_flamingo_3_model_name)
-    nvidia_flamingo_3_model = AudioFlamingo3ForConditionalGeneration.from_pretrained(nvidia_flamingo_3_model_name,
-                                                                                     device_map="auto")
-    print("model downloaded.")
+# def ask_nvidia_flamingo_3(text: str, audio_path: str)-> str:
+#   global nvidia_flamingo_3_model, nvidia_flamingo_3_processor, max_new_tokens
+#   if nvidia_flamingo_3_model is None:
+#     print("downloading model: ", nvidia_flamingo_3_model_name)
+#     nvidia_flamingo_3_processor = AutoProcessor.from_pretrained(nvidia_flamingo_3_model_name)
+#     nvidia_flamingo_3_model = AudioFlamingo3ForConditionalGeneration.from_pretrained(nvidia_flamingo_3_model_name,
+#                                                                                      device_map="auto")
+#     print("model downloaded.")
 
-  conversation = [
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": text},
-            {"type": "audio", "path": audio_path},
-        ],
-    }
-  ]
+#   conversation = [
+#     {
+#         "role": "user",
+#         "content": [
+#             {"type": "text", "text": text},
+#             {"type": "audio", "path": audio_path},
+#         ],
+#     }
+#   ]
 
-  inputs = nvidia_flamingo_3_processor.apply_chat_template(
-    conversation,
-    tokenize=True,
-    add_generation_prompt=True,
-    return_dict=True,
-  ).to(nvidia_flamingo_3_model.device)
+#   inputs = nvidia_flamingo_3_processor.apply_chat_template(
+#     conversation,
+#     tokenize=True,
+#     add_generation_prompt=True,
+#     return_dict=True,
+#   ).to(nvidia_flamingo_3_model.device)
 
-  outputs = nvidia_flamingo_3_model.generate(**inputs, max_new_tokens=max_new_tokens)
-  decoded_outputs = nvidia_flamingo_3_processor.batch_decode(
-    outputs[:, inputs.input_ids.shape[1]:],
-    skip_special_tokens=True
-  )
+#   outputs = nvidia_flamingo_3_model.generate(**inputs, max_new_tokens=max_new_tokens)
+#   decoded_outputs = nvidia_flamingo_3_processor.batch_decode(
+#     outputs[:, inputs.input_ids.shape[1]:],
+#     skip_special_tokens=True
+#   )
 
-  return decoded_outputs
+#   return decoded_outputs
 
-def ask_music_flamingo_hf(text: str, audio_path: str)-> str:
-  global nvidia_music_flamingo_hf_model, nvidia_music_flamingo_hf_processor, max_new_tokens
-  if nvidia_music_flamingo_hf_model is None:
-    print("downloading model: ", nvidia_music_flamingo_hf_model_name)
-    nvidia_music_flamingo_hf_processor = AutoProcessor.from_pretrained(nvidia_music_flamingo_hf_model_name)
-    nvidia_music_flamingo_hf_model = AudioFlamingo3ForConditionalGeneration.from_pretrained(nvidia_music_flamingo_hf_model_name,
-                                                                                            device_map="auto")
-    print("model downloaded.")
+# def ask_music_flamingo_hf(text: str, audio_path: str)-> str:
+#   global nvidia_music_flamingo_hf_model, nvidia_music_flamingo_hf_processor, max_new_tokens
+#   if nvidia_music_flamingo_hf_model is None:
+#     print("downloading model: ", nvidia_music_flamingo_hf_model_name)
+#     nvidia_music_flamingo_hf_processor = AutoProcessor.from_pretrained(nvidia_music_flamingo_hf_model_name)
+#     nvidia_music_flamingo_hf_model = AudioFlamingo3ForConditionalGeneration.from_pretrained(nvidia_music_flamingo_hf_model_name,
+#                                                                                             device_map="auto")
+#     print("model downloaded.")
 
-  conversation = [
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": text},
-            {"type": "audio", "path": audio_path},
-        ],
-    }
-  ]
+#   conversation = [
+#     {
+#         "role": "user",
+#         "content": [
+#             {"type": "text", "text": text},
+#             {"type": "audio", "path": audio_path},
+#         ],
+#     }
+#   ]
 
-  inputs = nvidia_music_flamingo_hf_processor.apply_chat_template(
-    conversation,
-    tokenize=True,
-    add_generation_prompt=True,
-    return_dict=True,
-  ).to(nvidia_music_flamingo_hf_model.device)
+#   inputs = nvidia_music_flamingo_hf_processor.apply_chat_template(
+#     conversation,
+#     tokenize=True,
+#     add_generation_prompt=True,
+#     return_dict=True,
+#   ).to(nvidia_music_flamingo_hf_model.device)
 
-  outputs = nvidia_music_flamingo_hf_model.generate(**inputs, max_new_tokens=max_new_tokens)
-  decoded_outputs = nvidia_music_flamingo_hf_processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:],
-                                                                    skip_special_tokens=True)
-  return decoded_outputs
+#   outputs = nvidia_music_flamingo_hf_model.generate(**inputs, max_new_tokens=max_new_tokens)
+#   decoded_outputs = nvidia_music_flamingo_hf_processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:],
+#                                                                     skip_special_tokens=True)
+#   return decoded_outputs
 
-def ask_qwen_audio_7B_instruct(text: str, audio_path: str)-> str:
-  global qwen_audio_7B_instruct_model, qwen_audio_7B_instruct_processor, max_new_tokens
-  if qwen_audio_7B_instruct_model is None:
-    print("downloading model: ", qwen_audio_7B_instruct_model_name)
+# def ask_qwen_audio_7B_instruct(text: str, audio_path: str)-> str:
+#   global qwen_audio_7B_instruct_model, qwen_audio_7B_instruct_processor, max_new_tokens
+#   if qwen_audio_7B_instruct_model is None:
+#     print("downloading model: ", qwen_audio_7B_instruct_model_name)
 
-    qwen_audio_7B_instruct_processor = AutoProcessor.from_pretrained(qwen_audio_7B_instruct_model_name)
-    qwen_audio_7B_instruct_model = Qwen2AudioForConditionalGeneration.from_pretrained(qwen_audio_7B_instruct_model_name,
-                                                                                    device_map="auto")
-    print("model downloaded.")
+#     qwen_audio_7B_instruct_processor = AutoProcessor.from_pretrained(qwen_audio_7B_instruct_model_name)
+#     qwen_audio_7B_instruct_model = Qwen2AudioForConditionalGeneration.from_pretrained(qwen_audio_7B_instruct_model_name,
+#                                                                                     device_map="auto")
+#     print("model downloaded.")
 
-  conversation = [
-    {'role': 'system', 'content': 'You are a helpful assistant.'},
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": audio_path},
-        {"type": "text", "text": text},
-    ]},
-  ]
+#   conversation = [
+#     {'role': 'system', 'content': 'You are a helpful assistant.'},
+#     {"role": "user", "content": [
+#         {"type": "audio", "audio_url": audio_path},
+#         {"type": "text", "text": text},
+#     ]},
+#   ]
 
-  text = qwen_audio_7B_instruct_processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
-  audios = []
-  for message in conversation:
-    if isinstance(message["content"], list):
-        for ele in message["content"]:
-            if ele["type"] == "audio":
-                audios.append(
-                    librosa.load(
-                        BytesIO(open(ele['audio_url'], 'rb').read()),
-                        sr=qwen_audio_7B_instruct_processor.feature_extractor.sampling_rate)[0]
-                )
-  inputs = qwen_audio_7B_instruct_processor(text=text, audios=audios, return_tensors="pt", padding=True).to(qwen_audio_7B_instruct_model.device)
-  inputs.input_ids = inputs.input_ids.to(qwen_audio_7B_instruct_model.device)
+#   text = qwen_audio_7B_instruct_processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+#   audios = []
+#   for message in conversation:
+#     if isinstance(message["content"], list):
+#         for ele in message["content"]:
+#             if ele["type"] == "audio":
+#                 audios.append(
+#                     librosa.load(
+#                         BytesIO(open(ele['audio_url'], 'rb').read()),
+#                         sr=qwen_audio_7B_instruct_processor.feature_extractor.sampling_rate)[0]
+#                 )
+#   inputs = qwen_audio_7B_instruct_processor(text=text, audios=audios, return_tensors="pt", padding=True).to(qwen_audio_7B_instruct_model.device)
+#   inputs.input_ids = inputs.input_ids.to(qwen_audio_7B_instruct_model.device)
 
-  generate_ids = qwen_audio_7B_instruct_model.generate(**inputs, max_length=max_new_tokens)
-  generate_ids = generate_ids[:, inputs.input_ids.size(1):]
+#   generate_ids = qwen_audio_7B_instruct_model.generate(**inputs, max_length=max_new_tokens)
+#   generate_ids = generate_ids[:, inputs.input_ids.size(1):]
 
-  response = qwen_audio_7B_instruct_processor.batch_decode(generate_ids,
-                                                         skip_special_tokens=True,
-                                                         clean_up_tokenization_spaces=False)[0]
+#   response = qwen_audio_7B_instruct_processor.batch_decode(generate_ids,
+#                                                          skip_special_tokens=True,
+#                                                          clean_up_tokenization_spaces=False)[0]
 
-  return response
+#   return response
 
-# inputs = input() # give it like: echo "input_file_name,audios_dir_name" | python script_name.py
-inputs = "audio_dataset.json,instrument-audios"
-input_dataset_path = inputs.split(",")[0]
-print("prompt dataset path: ", input_dataset_path)
-input_dataset = pd.read_json(input_dataset_path)
-print("prompt dataset loaded.")
+# # inputs = input() # give it like: echo "input_file_name,audios_dir_name" | python script_name.py
+# inputs = "audio_dataset.json,instrument-audios"
+# input_dataset_path = inputs.split(",")[0]
+# print("prompt dataset path: ", input_dataset_path)
+# input_dataset = pd.read_json(input_dataset_path)
+# print("prompt dataset loaded.")
 
-torch.cuda.empty_cache()
+# torch.cuda.empty_cache()
 
-for model_name, ask_model in (
-  (nvidia_flamingo_3_model_name, ask_nvidia_flamingo_3),
-  (nvidia_music_flamingo_hf_model_name, ask_music_flamingo_hf),
-  (qwen_audio_7B_instruct_model_name, ask_qwen_audio_7B_instruct),
+# for model_name, ask_model in (
+#   (nvidia_flamingo_3_model_name, ask_nvidia_flamingo_3),
+#   (nvidia_music_flamingo_hf_model_name, ask_music_flamingo_hf),
+#   (qwen_audio_7B_instruct_model_name, ask_qwen_audio_7B_instruct),
+# ):
+
+#   output_column_name = model_name.replace("/", "__").replace(".", "_")
+#   print("output column name: ", output_column_name)
+#   output_dataset_path = output_column_name + ".json"
+#   print("output_dataset_path: ", output_dataset_path)
+#   if os.path.exists(output_dataset_path):
+#     output_dataset = pd.read_json(output_dataset_path)
+#     print("output dataset loaded.")
+#   else:
+#     output_dataset = pd.DataFrame({output_column_name: []})
+#   print("inference started.")
+#   output_dataset_length = len(output_dataset)
+#   for index, row in input_dataset[output_dataset_length:].iterrows():
+#     print(index, "/", len(input_dataset))
+#     prompt = row["prompt"]
+#     audio_path = row["audio_path"]
+#     out = ask_model(prompt, audio_path)
+#     if "flamingo" in model_name:
+#       out = out[0]
+#     output_list = list(output_dataset[output_column_name])
+#     del output_dataset
+#     output_list.append(out)
+#     output_dataset = pd.DataFrame({output_column_name: output_list})
+#     output_dataset.to_json(output_dataset_path, index=False)
+#     torch.cuda.empty_cache()
+
+#   print("inference ended.")
+#   # delete current model to load the next to the GPU
+#   if model_name == qwen_audio_7B_instruct_model_name:
+#     qwen_audio_7B_instruct_model.to("cpu")
+#     del qwen_audio_7B_instruct_model
+#     del qwen_audio_7B_instruct_processor
+#     torch.cuda.empty_cache()
+#     gc.collect()
+#   elif model_name == nvidia_music_flamingo_hf_model_name:
+#     nvidia_music_flamingo_hf_model.to("cpu")
+#     del nvidia_music_flamingo_hf_model
+#     del nvidia_music_flamingo_hf_processor
+#     torch.cuda.empty_cache()
+#     gc.collect()
+#   elif model_name == nvidia_flamingo_3_model_name:
+#     nvidia_flamingo_3_model.to("cpu")
+#     del nvidia_flamingo_3_model
+#     del nvidia_flamingo_3_processor
+#     torch.cuda.empty_cache()
+#     gc.collect()
+
+
+def evaluate_audio_text_to_text_models(
+    model_names: list[str],
+    max_new_tokens: int = 300,
+    batch_size: int = 32,
 ):
+    """Generates the audio LM outputs sequentially
 
-  output_column_name = model_name.replace("/", "__").replace(".", "_")
-  print("output column name: ", output_column_name)
-  output_dataset_path = output_column_name + ".json"
-  print("output_dataset_path: ", output_dataset_path)
-  if os.path.exists(output_dataset_path):
-    output_dataset = pd.read_json(output_dataset_path)
-    print("output dataset loaded.")
-  else:
-    output_dataset = pd.DataFrame({output_column_name: []})
-  print("inference started.")
-  output_dataset_length = len(output_dataset)
-  for index, row in input_dataset[output_dataset_length:].iterrows():
-    print(index, "/", len(input_dataset))
-    prompt = row["prompt"]
-    audio_path = row["audio_path"]
-    out = ask_model(prompt, audio_path)
-    if "flamingo" in model_name:
-      out = out[0]
-    output_list = list(output_dataset[output_column_name])
-    del output_dataset
-    output_list.append(out)
-    output_dataset = pd.DataFrame({output_column_name: output_list})
-    output_dataset.to_json(output_dataset_path, index=False)
-    torch.cuda.empty_cache()
+    Args:
+        model_names (list[str]): a list of model names given to program by prompt
+    """
+    
+    with_audio_question = " The instrument's sound is given in the audio. What is the gender of the person?"
+    without_audio_question = " What is the gender of the person?"
+    texts = load_texts_list()
+    for model_name in model_names:
+        processor, model, inference_function = load_audio_processor_and_model_and_inference_function(model_name)
+        output_dataset_path = model_name.replace("/", "__").replace(".", "_") + ".json"
+        partial_result: pd.DataFrame = None
+        if os.path.isfile(output_dataset_path):
+            partial_result = pd.read_json(output_dataset_path)
+            partial_result.fillna("")
+            partial_result.drop_duplicates(
+                subset=["text", "instrument", "is_with_reason", "audio_path"],
+                inplace=True,
+            )
+            print("Already generated ", str(len(partial_result)))
+        # just evaluate based on text
+        data_texts = []
+        data_instruments = []
+        data_is_with_reasons = []
+        data_prompts = []
+        data_audio_paths = []
+        # for without audio
+        audio_path = ""
+        for instrument in TOTAL_INSTRUMENTS:
+            for text in texts:
+                for is_with_reason, prompt_template in [
+                    # (False, WITHOUT_REASON_PROMPT_TEMPLATE),
+                    (True, WITH_REASON_PROMPT_TEMPLATE),
+                ]:
+                    complete_prompt = template_to_complete_prompt(
+                        prompt_template, text, instrument, without_audio_question
+                    )
+                    if (partial_result is not None) and (
+                        len(  # if there is a partial result file, and it contains the row we are going to generate
+                            partial_result[
+                                (partial_result["text"] == text)
+                                & (partial_result["instrument"] == instrument)
+                                & (partial_result["is_with_reason"] == is_with_reason)
+                                & (partial_result["audio_path"] == audio_path)
+                            ]
+                        )
+                        > 0
+                    ):
+                        continue
+                    data_texts.append(text)
+                    data_instruments.append(instrument)
+                    data_is_with_reasons.append(is_with_reason)
+                    data_prompts.append(complete_prompt)
+                    data_audio_paths.append(audio_path)  # no audio
 
-  print("inference ended.")
-  # delete current model to load the next to the GPU
-  if model_name == qwen_audio_7B_instruct_model_name:
-    qwen_audio_7B_instruct_model.to("cpu")
-    del qwen_audio_7B_instruct_model
-    del qwen_audio_7B_instruct_processor
-    torch.cuda.empty_cache()
-    gc.collect()
-  elif model_name == nvidia_music_flamingo_hf_model_name:
-    nvidia_music_flamingo_hf_model.to("cpu")
-    del nvidia_music_flamingo_hf_model
-    del nvidia_music_flamingo_hf_processor
-    torch.cuda.empty_cache()
-    gc.collect()
-  elif model_name == nvidia_flamingo_3_model_name:
-    nvidia_flamingo_3_model.to("cpu")
-    del nvidia_flamingo_3_model
-    del nvidia_flamingo_3_processor
-    torch.cuda.empty_cache()
-    gc.collect()
+        # evaluate based on text and audio, round by round
+        for audio_round in range(1, 8):
+            for instrument in TOTAL_INSTRUMENTS:
+                audio_underline = instrument.replace(" ", "_")
+                audio_path = (
+                    "instrument-photos/"
+                    + audio_underline
+                    + "/"
+                    + audio_underline
+                    + str(audio_round)
+                    + ".mp3"
+                )
+                if not os.path.isfile(audio_path):
+                  continue # number of audios are not the same for different instruments
+                for text in texts:
+                    for is_with_reason, prompt_template in [
+                        # (False, WITHOUT_REASON_PROMPT_TEMPLATE),
+                        (True, WITH_REASON_PROMPT_TEMPLATE),
+                    ]:
+                        complete_prompt = template_to_complete_prompt(
+                            prompt_template,
+                            text,
+                            "instrument",
+                            with_audio_question,  # replace instrument with "instrument", we want the model to judge based on the audio, not the name of the instrument
+                        )
+                        if (partial_result is not None) and (
+                            len(  # if there is a partial result file, and it contains the row we are going to generate
+                                partial_result[
+                                    (partial_result["text"] == text)
+                                    & (partial_result["instrument"] == instrument)
+                                    & (
+                                        partial_result["is_with_reason"]
+                                        == is_with_reason
+                                    )
+                                    & (partial_result["audio_path"] == audio_path)
+                                ]
+                            )
+                            > 0
+                        ):
+                            continue
+                        data_texts.append(text)
+                        data_instruments.append(instrument)
+                        data_is_with_reasons.append(is_with_reason)
+                        data_prompts.append(complete_prompt)
+                        data_audio_paths.append(audio_path)
+        total_length = len(data_prompts)
+        print("Generating for ", str(total_length), " samples")
+        print("inference started")
+
+        if partial_result is None:
+            output_dataset = pd.DataFrame(
+                {
+                    "text": [],
+                    "instrument": [],
+                    "is_with_reason": [],
+                    "prompt": [],
+                    "audio_path": [],
+                    "model_output": [],
+                }
+            )
+        else:
+            output_dataset = partial_result
+
+        for start in range(0, len(data_prompts), batch_size):
+            start_time = dt.datetime.now()
+            end = min(start + batch_size, len(data_prompts))
+            print(
+                f"inferencing for batch, start: {start}, end: {end}, total: {len(data_prompts)}",
+                end=" ",
+            )
+            prompt_batch = data_prompts[start:end]
+            audio_path_batch = data_audio_paths[start:end]
+            messages = get_audio_model_messages(model_name, prompt_batch, audio_path_batch)
+            batch_model_outputs = inference_for_with_and_without_audio(
+              inference_function=inference_function,
+              processor=processor,
+              model=model,
+              messages=messages,
+              max_new_tokens=max_new_tokens
+            )
+            batch_output_dataset = pd.DataFrame(
+                {
+                    "text": data_texts[start:end],
+                    "instrument": data_instruments[start:end],
+                    "is_with_reason": data_is_with_reasons[start:end],
+                    "prompt": data_prompts[start:end],
+                    "audio_path": data_audio_paths[start:end],
+                    "model_output": batch_model_outputs,
+                }
+            )
+            output_dataset = pd.concat([output_dataset, batch_output_dataset])
+            output_dataset.reset_index(inplace=True, drop=True)
+            output_dataset.to_json(output_dataset_path, index=False)
+            end_time = dt.datetime.now()
+            batch_inference_time = end_time - start_time
+            print("batch inference time: ", batch_inference_time)
+        print("removing model from GPU...")
+        del processor  # no reference to the pipe any more, so it can be removed from GPU
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()  # remove the model from GPU
+
+    print("inference ended.")
