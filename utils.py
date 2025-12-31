@@ -308,7 +308,12 @@ def get_audio_model_messages(
             message = None
             if audio_path == "":
                 message = [
-                    {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                    {
+                        "role": "user",
+                        "content": [
+                        {"type": "text", "text": prompt}
+                        ]
+                    }
                 ]
             else:
                 message = [
@@ -336,13 +341,13 @@ def get_audio_model_messages(
                 ]
             else:
                 message = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "audio", "audio_url": audio_path},
-                            ],
-                        }
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "audio", "audio_url": audio_path},
+                        ],
+                    }
                 ]
             messages.append(message)
     return messages
