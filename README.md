@@ -19,11 +19,11 @@ There is a texts.json file, these are the descriptions that are used to evaluate
 Since we support different types of models, the usage of the project for each type is different.
 To evaluate each type of models (text-to-text, image-text-to-text, audio-text-to-text), enter the following command:
 ```
-python main.py TYPE_OF_MODEL
+python main.py TYPE_OF_MODEL MODEL_NAME(s) BATCH_SIZE
 ```
 For instance, to evaluate text-to-text models, enter:
 ```
-python main.py text-to-text
+python main.py text-to-text unsloth/Llama-3.2-1B-Instruct unsloth/Llama-3.2-1B-Instruct 5  
 ```
 The output of evaluation of each model, is a json file that stores model's outputs, whose name is the name of the model (by the way, its '/' is replaced by '__' and '.' is replaced by '_').
 
