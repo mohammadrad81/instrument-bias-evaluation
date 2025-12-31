@@ -311,7 +311,7 @@ def evaluate_audio_text_to_text_models(
             for instrument in TOTAL_INSTRUMENTS:
                 audio_underline = instrument.replace(" ", "_")
                 audio_path = (
-                    "instrument-photos/"
+                    "instrument-audios/"
                     + audio_underline
                     + "/"
                     + audio_underline
