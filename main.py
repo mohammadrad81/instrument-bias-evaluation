@@ -2,6 +2,7 @@ import sys
 from utils import get_model_names_and_addresses
 from text.evaluate_text import evaluate_llms
 from photo.evaluate_photo import evaluate_image_text_to_text_models
+from audio.evaluate_audio import evaluate_audio_text_to_text_models
 
 def main():
     max_new_tokens = 400
@@ -23,6 +24,9 @@ def main():
     elif evaluation_method == "image-text-to-text":
         print("image-text-to-text evaluation")
         evaluate_image_text_to_text_models(model_names, max_new_tokens, batch_size=batch_size)
+    elif evaluation_method == "audio-text-to-text":
+        print("audio-text-to-text evaluation")
+        evaluate_audio_text_to_text_models(model_names, batch_size=batch_size, max_new_tokens=max_new_tokens)
     else:
         print(f"invalid entered evaluation method: '{evaluation_method}', it must be one of text-to-text, image-text-to-text, audio-text-to-text")
     
