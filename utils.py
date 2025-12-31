@@ -336,7 +336,6 @@ def get_audio_model_messages(
                 ]
             else:
                 message = [
-                    [
                         {
                             "role": "user",
                             "content": [
@@ -344,7 +343,6 @@ def get_audio_model_messages(
                                 {"type": "audio", "audio_url": audio_path},
                             ],
                         }
-                    ]
                 ]
             messages.append(message)
     return messages
@@ -361,7 +359,8 @@ def inference_for_with_and_without_audio(inference_function,
         if len(message[0]["content"]) == 2
     ]
     without_audios = [
-        message for message in messages
+        message 
+        for message in messages
         if len(message[0]["content"]) == 1
     ]
 
