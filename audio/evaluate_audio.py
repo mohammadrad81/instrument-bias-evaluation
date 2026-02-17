@@ -282,8 +282,8 @@ def evaluate_audio_text_to_text_models(
         for instrument in TOTAL_INSTRUMENTS:
             for text in texts:
                 for is_with_reason, prompt_template in [
-                    # (False, WITHOUT_REASON_PROMPT_TEMPLATE),
-                    (True, WITH_REASON_PROMPT_TEMPLATE),
+                    (False, WITHOUT_REASON_PROMPT_TEMPLATE),
+                    # (True, WITH_REASON_PROMPT_TEMPLATE),
                 ]:
                     complete_prompt = template_to_complete_prompt(
                         prompt_template, text, instrument, without_audio_question
@@ -322,8 +322,8 @@ def evaluate_audio_text_to_text_models(
                   continue # number of audios are not the same for different instruments
                 for text in texts:
                     for is_with_reason, prompt_template in [
-                        # (False, WITHOUT_REASON_PROMPT_TEMPLATE),
-                        (True, WITH_REASON_PROMPT_TEMPLATE),
+                        (False, WITHOUT_REASON_PROMPT_TEMPLATE),
+                        # (True, WITH_REASON_PROMPT_TEMPLATE),
                     ]:
                         complete_prompt = template_to_complete_prompt(
                             prompt_template,
