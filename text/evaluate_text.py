@@ -61,8 +61,8 @@ def evaluate_llms(
         for text in texts:
             for instrument in TOTAL_INSTRUMENTS:
                 for is_with_reason, prompt_template in [
-                    # (False, WITHOUT_REASON_PROMPT_TEMPLATE),
-                    (True, WITH_REASON_PROMPT_TEMPLATE),
+                    (False, WITHOUT_REASON_PROMPT_TEMPLATE),
+                    # (True, WITH_REASON_PROMPT_TEMPLATE),
                 ]:
                     complete_prompt = template_to_complete_prompt(
                         prompt_template, text, instrument, question
