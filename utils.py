@@ -450,7 +450,7 @@ def gemma_4_inference(
     processor: AutoProcessor,
     model,
     messages: list,
-    max_new_tokens: int = 300,
+    max_new_tokens: int = 500,
 ) -> list[str]:
     processor.tokenizer.padding_side = "left"  # decoder-only batching needs left padding
     inputs = processor.apply_chat_template(
