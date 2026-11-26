@@ -3,11 +3,10 @@ from transformers import (
     Pipeline,
     AutoTokenizer,
     AutoModelForCausalLM,
-    AudioFlamingo3ForConditionalGeneration,
-    AutoProcessor,
-    Qwen2AudioForConditionalGeneration,
     AutoProcessor,
 )
+# the model classes of the audio models (AudioFlamingo3ForConditionalGeneration, Qwen2AudioForConditionalGeneration, ...)
+# are imported only when that model is loaded, in load_audio_processor_and_model_and_inference_function
 import librosa
 import os
 import torch
@@ -21,6 +20,8 @@ from copy import deepcopy
 QWEN_AUDIO_7B_MODEL_NAME = "Qwen/Qwen2-Audio-7B-Instruct"
 MUSIC_FLAMINGO_3_MODEL_NAME = "nvidia/music-flamingo-hf"
 GEMMA_4_12B_MODEL_NAME = "google/gemma-4-12B-it"
+# "8bit" loads gemma 4 in 8-bit quantization, "" loads it in full precision (bf16)
+GEMMA_4_QUANTIZATION = "8bit"
 
 # which experiments (is_with_reason values) to run for each audio model.
 # models not listed here run only the without-reason experiment.
@@ -369,7 +370,7 @@ def get_audio_model_messages(
 
 def inference_for_with_and_without_audio(inference_function,
                                          processor: AutoProcessor,
-                                         model: AudioFlamingo3ForConditionalGeneration | Qwen2AudioForConditionalGeneration,
+                                         model: "AudioFlamingo3ForConditionalGeneration | Qwen2AudioForConditionalGeneration",
                                          messages: list,
                                          max_new_tokens)->list[str]:
     # runs the messages with audio and without audio separately (they can not be batched together)
@@ -401,7 +402,7 @@ def inference_for_with_and_without_audio(inference_function,
 
 def music_flamingo_inference(
     processor: AutoProcessor,
-    model: AudioFlamingo3ForConditionalGeneration,
+    model: "AudioFlamingo3ForConditionalGeneration",
     messages: list,
     max_new_tokens: int=300
 ) -> list[str]:
@@ -418,7 +419,7 @@ def music_flamingo_inference(
 
 def qwen_audio_7B_inference(
     processor: AutoProcessor,
-    model: Qwen2AudioForConditionalGeneration,
+    model: "Qwen2AudioForConditionalGeneration",
     messages: list,
     max_new_tokens: int=300
 )-> list[str]:
@@ -483,17 +484,31 @@ def gemma_4_inference(
     return responses
 
 
+def get_audio_output_dataset_path(model_name: str) -> str:
+    """the output json file name of the model, quantized runs are stored in a separate file
+       e.g. google__gemma-4-12B-it.json, google__gemma-4-12B-it__8bit.json
+    """
+    path = model_name.replace("/", "__").replace(".", "_")
+    if model_name == GEMMA_4_12B_MODEL_NAME and GEMMA_4_QUANTIZATION != "":
+        path += "__" + GEMMA_4_QUANTIZATION
+    return path + ".json"
+
+
 def load_audio_processor_and_model_and_inference_function(model_name: str):
     processor = None
     model = None
     inference_function = None
     if model_name == MUSIC_FLAMINGO_3_MODEL_NAME:
+        from transformers import AudioFlamingo3ForConditionalGeneration
+
         processor = AutoProcessor.from_pretrained(model_name)
         model = AudioFlamingo3ForConditionalGeneration.from_pretrained(
             model_name, device_map="auto"
         )
         inference_function = music_flamingo_inference
     elif model_name == QWEN_AUDIO_7B_MODEL_NAME:
+
+        from transformers import Qwen2AudioForConditionalGeneration
 
         processor = AutoProcessor.from_pretrained(model_name)
         model = Qwen2AudioForConditionalGeneration.from_pretrained(
@@ -502,11 +517,16 @@ def load_audio_processor_and_model_and_inference_function(model_name: str):
         inference_function = qwen_audio_7B_inference
     elif model_name == GEMMA_4_12B_MODEL_NAME:
         # imported here, since it needs transformers 5.x and should not break the other models
-        from transformers import AutoModelForMultimodalLM
+        from transformers import AutoModelForMultimodalLM, BitsAndBytesConfig
 
         processor = AutoProcessor.from_pretrained(model_name)
+        quantization_kwargs = {}
+        if GEMMA_4_QUANTIZATION == "8bit":
+            # the bf16 model (~24GB) does not fit in an L4 (~22.5GB), in 8-bit it is ~13GB (needs bitsandbytes)
+            print("loading model in 8-bit quantization")
+            quantization_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
         model = AutoModelForMultimodalLM.from_pretrained(
-            model_name, dtype="auto", device_map="auto"
+            model_name, dtype=torch.bfloat16, device_map="auto", **quantization_kwargs
         )
         model.eval()
         inference_function = gemma_4_inference

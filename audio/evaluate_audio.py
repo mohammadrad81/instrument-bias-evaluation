@@ -10,12 +10,6 @@ Original file is located at
 # !pip install --upgrade pip
 # !pip install --upgrade git+https://github.com/huggingface/transformers accelerate
 
-from transformers import (
-  pipeline,
-  AutoProcessor,
-  AudioFlamingo3ForConditionalGeneration,
-  Qwen2AudioForConditionalGeneration
-)
 import torch
 import gc
 from io import BytesIO
@@ -52,6 +46,7 @@ from utils import (
     WITH_REASON_PROMPT_TEMPLATE,
     WITHOUT_REASON_PROMPT_TEMPLATE,
     AUDIO_MODELS_REASON_EXPERIMENTS,
+    get_audio_output_dataset_path,
 )
 
 # def is_valid_without_reason(text: str)-> bool:
@@ -267,7 +262,8 @@ def evaluate_audio_text_to_text_models(
             for is_with_reason in AUDIO_MODELS_REASON_EXPERIMENTS.get(model_name, [False])
         ]
         print("is_with_reason experiments: ", [is_with_reason for is_with_reason, _ in reason_experiments])
-        output_dataset_path = model_name.replace("/", "__").replace(".", "_") + ".json"
+        output_dataset_path = get_audio_output_dataset_path(model_name)
+        print("output file: ", output_dataset_path)
         partial_result: pd.DataFrame = None
         if os.path.isfile(output_dataset_path):
             partial_result = pd.read_json(output_dataset_path)
