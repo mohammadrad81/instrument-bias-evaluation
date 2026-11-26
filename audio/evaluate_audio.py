@@ -51,6 +51,7 @@ from utils import (
     TOTAL_INSTRUMENTS,
     WITH_REASON_PROMPT_TEMPLATE,
     WITHOUT_REASON_PROMPT_TEMPLATE,
+    AUDIO_MODELS_REASON_EXPERIMENTS,
 )
 
 # def is_valid_without_reason(text: str)-> bool:
@@ -261,6 +262,11 @@ def evaluate_audio_text_to_text_models(
     texts = load_texts_list()
     for model_name in model_names:
         processor, model, inference_function = load_audio_processor_and_model_and_inference_function(model_name)
+        reason_experiments = [
+            (is_with_reason, WITH_REASON_PROMPT_TEMPLATE if is_with_reason else WITHOUT_REASON_PROMPT_TEMPLATE)
+            for is_with_reason in AUDIO_MODELS_REASON_EXPERIMENTS.get(model_name, [False])
+        ]
+        print("is_with_reason experiments: ", [is_with_reason for is_with_reason, _ in reason_experiments])
         output_dataset_path = model_name.replace("/", "__").replace(".", "_") + ".json"
         partial_result: pd.DataFrame = None
         if os.path.isfile(output_dataset_path):
@@ -281,10 +287,7 @@ def evaluate_audio_text_to_text_models(
         audio_path = ""
         for instrument in TOTAL_INSTRUMENTS:
             for text in texts:
-                for is_with_reason, prompt_template in [
-                    (False, WITHOUT_REASON_PROMPT_TEMPLATE),
-                    # (True, WITH_REASON_PROMPT_TEMPLATE),
-                ]:
+                for is_with_reason, prompt_template in reason_experiments:
                     complete_prompt = template_to_complete_prompt(
                         prompt_template, text, instrument, without_audio_question
                     )
@@ -321,10 +324,7 @@ def evaluate_audio_text_to_text_models(
                 if not os.path.isfile(audio_path):
                   continue # number of audios are not the same for different instruments
                 for text in texts:
-                    for is_with_reason, prompt_template in [
-                        (False, WITHOUT_REASON_PROMPT_TEMPLATE),
-                        # (True, WITH_REASON_PROMPT_TEMPLATE),
-                    ]:
+                    for is_with_reason, prompt_template in reason_experiments:
                         complete_prompt = template_to_complete_prompt(
                             prompt_template,
                             text,

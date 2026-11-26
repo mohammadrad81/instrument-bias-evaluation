@@ -20,6 +20,13 @@ from copy import deepcopy
 
 QWEN_AUDIO_7B_MODEL_NAME = "Qwen/Qwen2-Audio-7B-Instruct"
 MUSIC_FLAMINGO_3_MODEL_NAME = "nvidia/music-flamingo-hf"
+GEMMA_4_12B_MODEL_NAME = "google/gemma-4-12B-it"
+
+# which experiments (is_with_reason values) to run for each audio model.
+# models not listed here run only the without-reason experiment.
+AUDIO_MODELS_REASON_EXPERIMENTS = {
+    GEMMA_4_12B_MODEL_NAME: [False, True],
+}
 
 GENDERS = ["Male", "Female", "non-binary"]
 
@@ -350,6 +357,14 @@ def get_audio_model_messages(
                     }
                 ]
             messages.append(message)
+    elif model_name == GEMMA_4_12B_MODEL_NAME:
+        messages = []
+        for prompt, audio_path in zip(prompts, audio_paths):
+            content = [{"type": "text", "text": prompt}]
+            if audio_path != "":
+                # gemma 4 recommends putting the audio after the text
+                content.append({"type": "audio", "audio": audio_path})
+            messages.append([{"role": "user", "content": content}])
     return messages
 
 def inference_for_with_and_without_audio(inference_function,
@@ -357,26 +372,30 @@ def inference_for_with_and_without_audio(inference_function,
                                          model: AudioFlamingo3ForConditionalGeneration | Qwen2AudioForConditionalGeneration,
                                          messages: list,
                                          max_new_tokens)->list[str]:
-    # without audios must be in the start of messages and then with audios, since it splits them and jois them again
-    with_audios = [
-        message
-        for message in messages
+    # runs the messages with audio and without audio separately (they can not be batched together)
+    # and returns the results in the same order as the given messages
+    with_audio_indices = [
+        index
+        for index, message in enumerate(messages)
         if len(message[0]["content"]) == 2
     ]
-    without_audios = [
-        message 
-        for message in messages
+    without_audio_indices = [
+        index
+        for index, message in enumerate(messages)
         if len(message[0]["content"]) == 1
     ]
 
-    with_audios_results = []
-    without_audios_results = []
-    if len(without_audios) > 0:
-        without_audios_results = inference_function(processor, model, messages, max_new_tokens)
-    if len(with_audios) > 0:
-        with_audios_results = inference_function(processor, model, messages, max_new_tokens)
-        
-    return without_audios_results + with_audios_results
+    results = [None] * len(messages)
+    for indices in (without_audio_indices, with_audio_indices):
+        if len(indices) == 0:
+            continue
+        group_results = inference_function(
+            processor, model, [messages[index] for index in indices], max_new_tokens
+        )
+        for index, result in zip(indices, group_results):
+            results[index] = result
+
+    return results
 
 
 
@@ -427,6 +446,43 @@ def qwen_audio_7B_inference(
     responses = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
     return responses
 
+def gemma_4_inference(
+    processor: AutoProcessor,
+    model,
+    messages: list,
+    max_new_tokens: int = 300,
+) -> list[str]:
+    processor.tokenizer.padding_side = "left"  # decoder-only batching needs left padding
+    inputs = processor.apply_chat_template(
+        messages,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+        add_generation_prompt=True,
+        padding=True,
+        enable_thinking=False,
+    ).to(model.device)
+    input_length = inputs["input_ids"].shape[-1]
+    with torch.inference_mode():
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
+    generated_ids = outputs[:, input_length:]
+
+    # gemma 4 may emit an (empty) thought block "<|channel>thought\n<channel|>" before the answer,
+    # keep only the tokens after the end of the thought channel
+    channel_end_id = processor.tokenizer.convert_tokens_to_ids("<channel|>")
+    if channel_end_id == processor.tokenizer.unk_token_id:
+        channel_end_id = None
+    responses = []
+    for ids in generated_ids.tolist():
+        if channel_end_id is not None and channel_end_id in ids:
+            last = len(ids) - 1 - ids[::-1].index(channel_end_id)
+            ids = ids[last + 1 :]
+        responses.append(
+            processor.tokenizer.decode(ids, skip_special_tokens=True).strip()
+        )
+    return responses
+
+
 def load_audio_processor_and_model_and_inference_function(model_name: str):
     processor = None
     model = None
@@ -444,6 +500,16 @@ def load_audio_processor_and_model_and_inference_function(model_name: str):
             model_name, device_map="auto"
         )
         inference_function = qwen_audio_7B_inference
+    elif model_name == GEMMA_4_12B_MODEL_NAME:
+        # imported here, since it needs transformers 5.x and should not break the other models
+        from transformers import AutoModelForMultimodalLM
+
+        processor = AutoProcessor.from_pretrained(model_name)
+        model = AutoModelForMultimodalLM.from_pretrained(
+            model_name, dtype="auto", device_map="auto"
+        )
+        model.eval()
+        inference_function = gemma_4_inference
     else:
         raise Exception("unsupported model: ", model_name)
 
